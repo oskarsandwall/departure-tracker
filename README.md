@@ -1,6 +1,8 @@
 # departure-tracker
 
-This solution will not work without a appsettings.json in the SlBusProxy folder looking something like this:
+I only made this solution for fun to check which buses I can take between work and home. The original solution consists of a index.html which contains the presentation of the information and a .NET backend for calling the actual APIs that have the bus departure/arrival information. In the same directory as the index.html file there is also a html file that is not dependent on a backend. But in order to use that you need to hardcode in your own API key which is not best practice if you intend to expose this file to other ppl since API keys are considered secrets and should be treated as such.
+
+In order to get this solution to work you need to add a appsettings.json file in the SlBusProxy folder looking something like this and add the required IDs and API key. More on the keys and APIs needed further down on this page.
 
 ```
 {
