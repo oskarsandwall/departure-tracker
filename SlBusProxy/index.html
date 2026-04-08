@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Buses Gullmarsplan → Norra Sköndal (next 20 min)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+        }
+
+        th {
+            background: #eee;
+        }
+    </style>
+</head>
+<body>
+    <h1>Buses Gullmarsplan → Norra Sköndal (next 20 minutes)</h1>
+    <div id="status">Loading…</div>
+    <table id="bus-table">
+        <thead>
+            <tr>
+                <th>Line</th>
+                <th>Destination</th>
+                <th>Departure time</th>
+                <th>Minutes left</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>const API_KEY = "YOUR_API_KEY";          // <- put your Trafiklab key here
+    const SITE_ID = "GULLMARSPLAN_ID";       // <- real Gullmarsplan siteId
+    const DEST_NAME = "Norra Sköndal";       // <- match destination name
+    const MAX_MINUTES = 20;                  // only show buses within 20 minutes
+
+    async function fetchDepartures() {
+      const statusEl = document.getElementById("status");
+      statusEl.textContent = "Updating…";
+
+      try {
+        const url =
+          `https://api.sl.se/api2/realtimedeparturesV4.json` +
+          `?key=${API_KEY}&siteid=${SITE_ID}&timewindow=60`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("HTTP " + response.status);
+
+        const data = await response.json();
+
+        // Change this path if using a different version of the API
+        const buses = data.ResponseData && data.ResponseData.Buses
+          ? data.ResponseData.Buses
+          : [];
+
+        const now = new Date();
+
+        // Filter only buses to Norra Sköndal and within the next 20 min
+        const filtered = buses
+          .map(bus => {
+            // SL often gives DisplayTime like "5 min", "Nu", or a clock time "14:32"
+            let minutesLeft = null;
+            if (bus.DisplayTime === "Nu") {
+              minutesLeft = 0;
+            } else if (/^\d+\s*min$/.test(bus.DisplayTime)) {
+              minutesLeft = parseInt(bus.DisplayTime);
+            } else if (/^\d{1,2}:\d{2}$/.test(bus.DisplayTime)) {
+              // parse clock time "HH:MM" for today
+              const [h, m] = bus.DisplayTime.split(":").map(Number);
+              const dep = new Date(now);
+              dep.setHours(h, m, 0, 0);
+              minutesLeft = Math.round((dep - now) / 60000);
+            }
+
+            return { ...bus, minutesLeft };
+          })
+          .filter(bus =>
+            bus.Destination && bus.Destination.toLowerCase() === DEST_NAME.toLowerCase() &&
+            bus.minutesLeft !== null &&
+            bus.minutesLeft >= 0 &&
+            bus.minutesLeft <= MAX_MINUTES
+          )
+          .sort((a, b) => a.minutesLeft - b.minutesLeft);
+
+        renderTable(filtered);
+        statusEl.textContent = "Last updated: " + now.toLocaleTimeString();
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error loading data: " + err.message;
+      }
+    }
+
+    function renderTable(buses) {
+      const tbody = document.querySelector("#bus-table tbody");
+      tbody.innerHTML = "";
+
+      if (buses.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.textContent = "No buses to Norra Sköndal within 20 minutes.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+
+      buses.forEach(bus => {
+        const tr = document.createElement("tr");
+
+        const line = document.createElement("td");
+        line.textContent = bus.LineNumber || bus.LineRef || "";
+        tr.appendChild(line);
+
+        const dest = document.createElement("td");
+        dest.textContent = bus.Destination;
+        tr.appendChild(dest);
+
+        const depTime = document.createElement("td");
+        // Show either the "ExpectedDateTime" or the DisplayTime text
+        depTime.textContent = bus.ExpectedDateTime || bus.DisplayTime;
+        tr.appendChild(depTime);
+
+        const mins = document.createElement("td");
+        mins.textContent = bus.minutesLeft + " min";
+        tr.appendChild(mins);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Initial load
+    fetchDepartures();
+    // Refresh every 30 seconds
+    setInterval(fetchDepartures, 30000);</script>
+</body>
+</html>

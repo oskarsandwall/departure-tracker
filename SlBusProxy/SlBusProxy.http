@@ -1,0 +1,6 @@
+@SlBusProxy_HostAddress = http://localhost:5177
+
+GET {{SlBusProxy_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
