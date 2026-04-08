@@ -28,9 +28,10 @@ public class SlRealtimeController : ControllerBase
 
         // Build SL URL: adjust for different version or params
         var url =
-            $"realtimedeparturesV4.json?key={WebUtility.UrlEncode(_settings.ApiKey)}" +
-            $"&siteid={WebUtility.UrlEncode(_settings.SiteId)}" +
-            $"&timewindow={timeWindow}";
+            $"trip?format=json&passlist=true&showPassingPoints=true" +
+            $"&originId={WebUtility.UrlEncode(_settings.OriginSiteId)}" +
+            $"&destId={WebUtility.UrlEncode(_settings.DestinationSiteId)}" +
+            $"&accessId=de08d6c2-a598-4311-817e-ae0fc1b1a0ca";
 
         var response = await client.GetAsync(url);
 

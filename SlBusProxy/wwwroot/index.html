@@ -1,0 +1,187 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Buses Gullmarsplan → Norra Sköndal (next 20 min)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+        }
+
+        th {
+            background: #eee;
+        }
+    </style>
+</head>
+<body>
+    <h1>Buses Gullmarsplan → Norra Sköndal (next 20 minutes)</h1>
+    <div id="status">Loading…</div>
+    <table id="bus-table">
+        <thead>
+            <tr>
+                <th>Line</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Departs</th>
+                <th>Arrives</th>
+                <th>Minutes left</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        // Your backend base URL
+        const BACKEND_BASE_URL = "https://localhost:7130"; // adjust port
+
+        const MAX_MINUTES = 60;
+
+        async function fetchTrips() {
+            const statusEl = document.getElementById("status");
+            statusEl.textContent = "Updating…";
+
+            try {
+                // Use whatever path your .NET backend exposes for this data
+                const url = `${BACKEND_BASE_URL}/api/slrealtime/departures?timeWindow=60`;
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("HTTP " + response.status);
+
+                const data = await response.json();
+                const trips = Array.isArray(data.Trip) ? data.Trip : [];
+
+                const now = new Date();
+
+                const processed = trips
+                    .map(trip => {
+                        // Basic fields
+                        const origin = trip.Origin || {};
+                        const destination = trip.Destination || {};
+
+                        // Use the first leg/product for line info
+                        const leg = trip.LegList && Array.isArray(trip.LegList.Leg)
+                            ? trip.LegList.Leg[0]
+                            : null;
+                        const product = leg && Array.isArray(leg.Product)
+                            ? leg.Product[0]
+                            : null;
+
+                        const line =
+                            (product && (product.displayNumber || product.line || product.num)) || "";
+
+                        // Build departure Date from origin.date + origin.time
+                        const depDateStr = origin.date; // e.g. "2026-04-08"
+                        const depTimeStr = origin.time; // e.g. "13:30:00"
+
+                        let departure = null;
+                        if (depDateStr && depTimeStr) {
+                            // Interpret as local time (browser local)
+                            departure = new Date(`${depDateStr}T${depTimeStr}`);
+                        }
+
+                        // Build arrival Date from destination.date + destination.time
+                        const arrDateStr = destination.date;
+                        const arrTimeStr = destination.time;
+                        let arrival = null;
+                        if (arrDateStr && arrTimeStr) {
+                            arrival = new Date(`${arrDateStr}T${arrTimeStr}`);
+                        }
+
+                        let minutesLeft = null;
+                        if (departure) {
+                            minutesLeft = Math.round((departure - now) / 60000);
+                        }
+
+                        return {
+                            line,
+                            originName: origin.name || "",
+                            destinationName: destination.name || "",
+                            departure,
+                            arrival,
+                            minutesLeft
+                        };
+                    })
+                    .filter(t =>
+                        t.departure &&
+                        t.minutesLeft !== null &&
+                        t.minutesLeft >= 0 &&           // not left yet
+                        t.minutesLeft <= MAX_MINUTES    // within next MAX_MINUTES minutes
+                    )
+                    .sort((a, b) => a.departure - b.departure);
+
+                renderTable(processed);
+                statusEl.textContent = "Last updated: " + now.toLocaleTimeString();
+            } catch (err) {
+                console.error(err);
+                statusEl.textContent = "Error loading data: " + err.message;
+            }
+        }
+
+        function formatTime(date) {
+            if (!date) return "";
+            return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
+
+        function renderTable(trips) {
+            const tbody = document.querySelector("#bus-table tbody");
+            tbody.innerHTML = "";
+
+            if (trips.length === 0) {
+                const tr = document.createElement("tr");
+                const td = document.createElement("td");
+                td.colSpan = 6;
+                td.textContent = "No buses within 20 minutes.";
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+                return;
+            }
+
+            trips.forEach(t => {
+                const tr = document.createElement("tr");
+
+                const lineTd = document.createElement("td");
+                lineTd.textContent = t.line;
+                tr.appendChild(lineTd);
+
+                const fromTd = document.createElement("td");
+                fromTd.textContent = t.originName;
+                tr.appendChild(fromTd);
+
+                const toTd = document.createElement("td");
+                toTd.textContent = t.destinationName;
+                tr.appendChild(toTd);
+
+                const depTd = document.createElement("td");
+                depTd.textContent = formatTime(t.departure);
+                tr.appendChild(depTd);
+
+                const arrTd = document.createElement("td");
+                arrTd.textContent = formatTime(t.arrival);
+                tr.appendChild(arrTd);
+
+                const minsTd = document.createElement("td");
+                minsTd.textContent =
+                    t.minutesLeft !== null ? `${t.minutesLeft} min` : "";
+                tr.appendChild(minsTd);
+
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Initial load + refresh
+        fetchTrips();
+        setInterval(fetchTrips, 30000);
+    </script>
+</body>
+</html>
